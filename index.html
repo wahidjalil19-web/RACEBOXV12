@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RACE BOX V12</title>
+<style>
+/* ====================== Global ====================== */
+body{
+  margin:0;
+  font-family: 'Arial', sans-serif;
+  background: linear-gradient(180deg,#050505,#111,#050505);
+  color:white;
+  text-align:center;
+}
+
+.header{
+  background:#0f0f0f;
+  padding:20px;
+  font-size:28px;
+  color:#00ff9c;
+  letter-spacing:2px;
+  box-shadow:0 0 20px #00ff9c33;
+}
+
+/* ====================== Timer & Speed ====================== */
+.container{padding:15px;}
+.timer{font-size:70px;font-weight:bold;margin:15px 0;color:#00ff9c;}
+.speedBox{font-size:40px;margin:10px 0;}
+.topSpeedBox{font-size:28px;margin:5px 0;color:#ffd700;}
+
+/* ====================== Panels ====================== */
+.panel{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:15px;
+  margin-top:20px;
+}
+.card{
+  background:#121212;
+  padding:18px;
+  border-radius:12px;
+  box-shadow:0 0 10px #000;
+  font-size:20px;
+}
+.card span{
+  font-size:26px;
+  color:#00ff9c;
+}
+
+/* ====================== Buttons ====================== */
+.buttons{margin-top:20px;}
+button{
+  font-size:18px;
+  padding:12px 20px;
+  margin:5px;
+  border:none;
+  border-radius:10px;
+  cursor:pointer;
+}
+.start{background:#00ff9c;color:black;}
+.reset{background:#ff3b3b;color:white;}
+.historybtn{background:#2b7cff;color:white;}
+
+/* ====================== History ====================== */
+#history{margin-top:20px;}
+.historyCard{
+  background:#121212;
+  padding:15px;
+  border-radius:10px;
+  margin:10px;
+  box-shadow:0 0 8px #000;
+  text-align:left;
+}
+
+/* ====================== Graph ====================== */
+#graph{
+  width:100%;
+  height:200px;
+  background:#111;
+  border-radius:12px;
+  margin-top:20px;
+  position:relative;
+}
+.bar{
+  position:absolute;
+  bottom:0;
+  width:3px;
+  background:#00ff9c;
+}
+
+/* ====================== Footer ====================== */
+.footer{
+  margin-top:20px;
+  font-size:14px;
+  color:#777;
+}
+</style>
+</head>
+<body>
+
+<div class="header">RACE BOX BY WAHID</div>
+
+<div class="container">
+
+<div class="timer" id="timer">0.000</div>
+<div class="speedBox">Speed: <span id="speed">0</span> km/h</div>
+<div class="topSpeedBox">Top Speed: <span id="topspeed">0</span> km/h</div>
+
+<div class="panel">
+  <div class="card">0-60 km/h<br><span id="zero60">-</span> s</div>
+  <div class="card">60 m<br><span id="m60">-</span> s</div>
+  <div class="card">201 m<br><span id="m201">-</span> s</div>
+  <div class="card">401 m<br><span id="m401">-</span> s</div>
+</div>
+
+<div id="graph"></div>
+
+<div class="buttons">
+  <button class="start" onclick="startRace()">START</button>
+  <button class="reset" onclick="resetRace()">RESET</button>
+  <button class="historybtn" onclick="showHistory()">HISTORY</button>
+</div>
+
+<div id="history"></div>
+
+<div class="footer">JavaTech Racing Technology 2026</div>
+</div>
+
+<script>
+let watchID;
+let startTime;
+let startPos;
+
+let topSpeed = 0;
+let zero60done = false, m60done = false, m201done = false, m401done = false;
+
+let history = [];
+let graphData = [];
+
+function startRace(){
+  resetRace();
+  navigator.geolocation.getCurrentPosition(function(pos){
+    startPos = pos.coords;
+    startTime = Date.now();
+    watchID = navigator.geolocation.watchPosition(updateRace, error, {enableHighAccuracy:true, maximumAge:0, timeout:10000});
+  });
+}
+
+function updateRace(pos){
+  if(pos.coords.accuracy>20) return;
+
+  let speed = (pos.coords.speed||0)*3.6;
+  if(speed<3) speed=0; // filter noise
+
+  document.getElementById("speed").innerText = speed.toFixed(1);
+
+  if(speed>topSpeed && speed>5){
+    topSpeed = speed;
+    document.getElementById("topspeed").innerText = topSpeed.toFixed(1);
+  }
+
+  let time = (Date.now()-startTime)/1000;
+  document.getElementById("timer").innerText = time.toFixed(3);
+
+  let distance = getDistance(startPos.latitude,startPos.longitude,pos.coords.latitude,pos.coords.longitude);
+
+  // Milestones
+  if(speed>=60 && !zero60done){document.getElementById("zero60").innerText=time.toFixed(3); zero60done=true;}
+  if(distance>=60 && !m60done){document.getElementById("m60").innerText=time.toFixed(3); m60done=true;}
+  if(distance>=201 && !m201done){document.getElementById("m201").innerText=time.toFixed(3); m201done=true;}
+  if(distance>=401 && !m401done){document.getElementById("m401").innerText=time.toFixed(3); m401done=true; saveHistory(time);}
+
+  // Graph
+  graphData.push(speed);
+  renderGraph();
+}
+
+function resetRace(){
+  if(watchID) navigator.geolocation.clearWatch(watchID);
+  startTime = null; startPos = null;
+  topSpeed = 0; zero60done = m60done = m201done = m401done = false;
+  graphData = [];
+  document.getElementById("timer").innerText="0.000";
+  document.getElementById("speed").innerText="0";
+  document.getElementById("topspeed").innerText="0";
+  document.getElementById("zero60").innerText="-";
+  document.getElementById("m60").innerText="-";
+  document.getElementById("m201").innerText="-";
+  document.getElementById("m401").innerText="-";
+  document.getElementById("history").innerHTML="";
+  renderGraph();
+}
+
+function saveHistory(time){
+  let data = {time:time.toFixed(3), top:topSpeed.toFixed(1)};
+  history.unshift(data);
+  localStorage.setItem("raceHistory", JSON.stringify(history));
+}
+
+function showHistory(){
+  history = JSON.parse(localStorage.getItem("raceHistory"))||[];
+  let text = "<h2>Race History</h2>";
+  history.forEach((h,i)=>{
+    text += `<div class="historyCard">Run ${i+1}<br>401m : ${h.time} s<br>Top Speed : ${h.top} km/h</div>`;
+  });
+  document.getElementById("history").innerHTML=text;
+}
+
+function getDistance(lat1,lon1,lat2,lon2){
+  let R=6371000, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
+  let a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  let c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  return R*c;
+}
+
+function renderGraph(){
+  const g=document.getElementById("graph");
+  g.innerHTML="";
+  graphData.slice(-100).forEach((s,i)=>{
+    let bar = document.createElement("div");
+    bar.className="bar";
+    bar.style.height = (s*2)+"px";
+    bar.style.left = (i*3)+"px";
+    g.appendChild(bar);
+  });
+}
+
+function error(){alert("GPS Error");}
+</script>
+</body>
+</html>
